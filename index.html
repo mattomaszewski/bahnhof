@@ -727,37 +727,83 @@
     </div>
 
     <script>
-        // In-memory storage for user preferences
-        let userPreferences = {
+        // Local storage key for user preferences
+        const STORAGE_KEY = 'train-board-preferences';
+        
+        // Default preferences
+        const defaultPreferences = {
             selectedStation: null,
-            selectedStationName: 'Berlin Hbf'
+            selectedStationName: 'Berlin Hbf',
+            currentMode: 'departures',
+            isAutoRefreshOn: false,
+            transportFilter: {
+                's-bahn': true,
+                'regional': true,
+                'long-distance': true,
+                'metro': true,
+                'tram': true,
+                'bus': true,
+                'ferry': true
+            }
         };
         
-        // Transport filter settings
-        let transportFilter = {
-    's-bahn': true,
-    'regional': true,
-    'long-distance': true,
-    'metro': true,
-    'tram': true,
-    'bus': true,
-    'ferry': true
-};
-
+        // Load preferences from local storage
+        function loadPreferences() {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    // Merge with defaults to ensure all properties exist
+                    return { ...defaultPreferences, ...parsed };
+                }
+            } catch (error) {
+                console.warn('Error loading preferences from localStorage:', error);
+            }
+            return { ...defaultPreferences };
+        }
+        
+        // Save preferences to local storage
+        function savePreferences() {
+            try {
+                const preferences = {
+                    selectedStation: userPreferences.selectedStation,
+                    selectedStationName: userPreferences.selectedStationName,
+                    currentMode: currentMode,
+                    isAutoRefreshOn: isAutoRefreshOn,
+                    transportFilter: { ...transportFilter }
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+                console.log('Preferences saved:', preferences);
+            } catch (error) {
+                console.warn('Error saving preferences to localStorage:', error);
+            }
+        }
+        
+        // Initialize preferences from storage
+        const savedPreferences = loadPreferences();
+        
+        // User preferences (restored from storage)
+        let userPreferences = {
+            selectedStation: savedPreferences.selectedStation,
+            selectedStationName: savedPreferences.selectedStationName
+        };
+        
+        // Transport filter settings (restored from storage)
+        let transportFilter = { ...savedPreferences.transportFilter };
         
         const searchInput = document.getElementById('stationSearch');
         const suggestionsBox = document.getElementById('stationSuggestions');
 
         let searchTimeout = null;
         let autoRefreshInterval = null;
-        let isAutoRefreshOn = false;
+        let isAutoRefreshOn = savedPreferences.isAutoRefreshOn;
         let currentData = [];
         let isLoading = false;
         let hasMoreData = true;
-        let currentStationId = null;
-        let currentMode = 'departures';
+        let currentStationId = userPreferences.selectedStation;
+        let currentMode = savedPreferences.currentMode;
 
-        // Initialize with Berlin Hbf
+        // Initialize with saved station
         searchInput.value = userPreferences.selectedStationName;
 
         // Add click-to-reset functionality for search input
@@ -790,6 +836,7 @@
                             currentStationId = station.id;
                             searchInput.value = station.name;
                             suggestionsBox.style.display = 'none';
+                            savePreferences(); // Save when station changes
                             refreshData();
                         });
                         suggestionsBox.appendChild(option);
@@ -841,6 +888,8 @@
                 checkbox.classList.remove('checked');
             }
             
+            savePreferences(); // Save when transport filter changes
+            
             // Refresh data to apply filter
             if (currentStationId) {
                 refreshData();
@@ -852,6 +901,8 @@
                 transportFilter[mode] = true;
                 document.getElementById(`${mode}-check`).classList.add('checked');
             });
+            
+            savePreferences(); // Save when transport filter is reset
             
             // Refresh data to apply filter
             if (currentStationId) {
@@ -969,6 +1020,8 @@
             const loadingText = document.getElementById('loadingText');
             loadingText.textContent = mode === 'departures' ? 'Lade weitere Abfahrten...' : 'Lade weitere Ankünfte...';
             
+            savePreferences(); // Save when mode changes
+            
             // Refresh data if we have a station
             if (currentStationId) {
                 refreshData();
@@ -1073,7 +1126,7 @@
             hasMoreData = true;
             
             try {
-                // If we don't have station ID, get it first (default to Berlin Hbf)
+                // If we don't have station ID, get it first (default to saved station or Berlin Hbf)
                 if (!currentStationId) {
                     const defaultQuery = userPreferences.selectedStationName;
                     const stationResponse = await fetch(`https://v6.vbb.transport.rest/locations?query=${encodeURIComponent(defaultQuery)}&results=10`);
@@ -1088,16 +1141,16 @@
                         throw new Error(`${defaultQuery} nicht gefunden`);
                     }
                     
-                    // Find Berlin Hbf specifically or fallback to first station
+                    // Find exact match or fallback to first station
                     const selectedStation = stations.find(station => 
-                        station.name.toLowerCase().includes('berlin') && 
-                        (station.name.toLowerCase().includes('hbf') || station.name.toLowerCase().includes('hauptbahnhof'))
+                        station.name.toLowerCase().includes(defaultQuery.toLowerCase())
                     ) || stations[0];
                     
                     currentStationId = selectedStation.id;
                     userPreferences.selectedStation = selectedStation.id;
                     userPreferences.selectedStationName = selectedStation.name;
                     searchInput.value = selectedStation.name;
+                    savePreferences(); // Save updated station info
                 }
                 
                 // Get departures or arrivals
@@ -1166,6 +1219,8 @@
                 button.classList.add('active');
                 refreshData();
             }
+            
+            savePreferences(); // Save when auto-refresh state changes
         }
         
         // Function to update last refresh time
@@ -1187,14 +1242,68 @@
             }
         }
         
+        // Function to restore UI state from saved preferences
+        function restoreUIState() {
+            // Restore mode tabs
+            document.getElementById('departuresTab').classList.toggle('active', currentMode === 'departures');
+            document.getElementById('arrivalsTab').classList.toggle('active', currentMode === 'arrivals');
+            
+            // Restore transport filter checkboxes
+            Object.keys(transportFilter).forEach(mode => {
+                const checkbox = document.getElementById(`${mode}-check`);
+                if (checkbox) {
+                    if (transportFilter[mode]) {
+                        checkbox.classList.add('checked');
+                    } else {
+                        checkbox.classList.remove('checked');
+                    }
+                }
+            });
+            
+            // Restore auto-refresh button state
+            const autoRefreshBtn = document.getElementById('autoRefreshBtn');
+            if (isAutoRefreshOn) {
+                autoRefreshBtn.innerHTML = `
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Auto: EIN`;
+                autoRefreshBtn.classList.add('active');
+                
+                // Start auto-refresh interval
+                autoRefreshInterval = setInterval(() => {
+                    refreshData();
+                    updateCurrentTime();
+                }, 60000);
+            } else {
+                autoRefreshBtn.innerHTML = `
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Auto: AUS`;
+                autoRefreshBtn.classList.remove('active');
+            }
+            
+            // Update loading text based on mode
+            const loadingText = document.getElementById('loadingText');
+            loadingText.textContent = currentMode === 'departures' ? 'Lade weitere Abfahrten...' : 'Lade weitere Ankünfte...';
+        }
+        
         // Initialize
         window.addEventListener('load', function() {
             updateCurrentTime();
             setInterval(updateCurrentTime, 1000);
-            refreshData(); // This will load Berlin Hbf by default
+            
+            // Restore UI state from saved preferences
+            restoreUIState();
+            
+            // Load data with saved preferences
+            refreshData();
             
             const container = document.getElementById('dataContainer');
             container.addEventListener('scroll', handleScroll, { passive: true });
+            
+            console.log('App initialized with saved preferences:', savedPreferences);
         });
     </script>
 </body>
