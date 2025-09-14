@@ -1,0 +1,25 @@
+{
+  "name": "bahnhof-test",
+  "version": "1.0.0",
+  "description": "Test version of the bahnhof train station board application",
+  "main": "index-test.html",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0",
+    "start": "echo \"Open index-test.html in a web browser\""
+  },
+  "keywords": [
+    "train",
+    "station",
+    "departures", 
+    "arrivals",
+    "germany",
+    "test"
+  ],
+  "author": "bahnhof-test",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mattomaszewski/bahnhof.git",
+    "directory": "bahnhof-test"
+  }
+}
