@@ -987,15 +987,23 @@
             return transportFilter[lineType] === false;
         }
         
-        // Function to calculate delay
-        function getDelayInfo(scheduled, realtime) {
-            if (!realtime || !scheduled) {
+        // Function to calculate delay - FIXED VERSION
+        function getDelayInfo(item) {
+            if (!item) {
                 return { text: 'pünktlich', class: 'on-time' };
             }
             
-            const scheduledTime = new Date(scheduled);
-            const realtimeTime = new Date(realtime);
-            const delayMinutes = Math.round((realtimeTime - scheduledTime) / 60000);
+            const plannedTime = item.plannedWhen;
+            const actualTime = item.when;
+            
+            // If there's no realtime data, assume on-time
+            if (!actualTime || !plannedTime) {
+                return { text: 'pünktlich', class: 'on-time' };
+            }
+            
+            const plannedDate = new Date(plannedTime);
+            const actualDate = new Date(actualTime);
+            const delayMinutes = Math.round((actualDate - plannedDate) / 60000);
             
             if (delayMinutes <= 0) {
                 return { text: 'pünktlich', class: 'on-time' };
@@ -1030,9 +1038,11 @@
         
         // Function to create departure item HTML
         function createDepartureItem(item) {
-            const delayInfo = getDelayInfo(item.plannedWhen, item.when);
-            const time = formatTime(item.when || item.plannedWhen);
-            const minutesUntil = getMinutesUntil(item.when || item.plannedWhen);
+            const delayInfo = getDelayInfo(item);
+            // Use actual time if available, otherwise planned time
+            const displayTime = item.when || item.plannedWhen;
+            const time = formatTime(displayTime);
+            const minutesUntil = getMinutesUntil(displayTime);
             const lineType = getLineType(item.line ? item.line.name : 'Unbekannt');
             
             let destination, line, platform, originInfo = '';
